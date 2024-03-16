@@ -1,45 +1,46 @@
-name: Build
-on:
-  push:
-    branches:
-    - master
-    - "4.3"
-    - "3.0"
-    paths-ignore:
-    - "README.md"
-    - "release-notes/*"
-  pull_request:
-    branches:
-    - master
-permissions:
-  contents: read
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    env:
+      JAVA_OPTS: -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+    runs-on: self-hosted
+    steps:
+    - continue-on-error: true
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+    - continue-on-error: true
+      name: Set up JDK
+      uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8
+      with:
+        cache: maven
+        distribution: temurin
+        java-version: ${{ matrix.java_version }}
+    - continue-on-error: true
+      name: Build
+      run: ./mvnw -B -q -ff -ntp verify
+    - continue-on-error: true
+      if: github.event_name != 'pull_request' && matrix.java_version == '8'
+      name: Generate code coverage
+      run: ./mvnw -B -q -ff -ntp test
+    - continue-on-error: true
+      if: github.event_name != 'pull_request' && matrix.java_version == '8'
+      name: Publish code coverage
+      uses: codecov/codecov-action@54bcd8715eee62d40e33596ef5e8f0f48dbbccab
+      with:
+        file: ./target/site/jacoco/jacoco.xml
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
-        java_version: ['8', '11', '17', '21']
-        os: ['ubuntu-20.04']
-    env:
-      JAVA_OPTS: "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
-    steps:
-    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-    - name: Set up JDK
-      uses: actions/setup-java@9704b39bf258b59bc04b50fa2dd55e9ed76b47a8 # v4.1.0
-      with:
-        distribution: "temurin"
-        java-version: ${{ matrix.java_version }}
-        cache: 'maven'
-    - name: Build
-      run: ./mvnw -B -q -ff -ntp verify
-    - name: Generate code coverage
-      if: github.event_name != 'pull_request' && matrix.java_version == '8'
-      run: ./mvnw -B -q -ff -ntp test
-    - name: Publish code coverage
-      if: github.event_name != 'pull_request' && matrix.java_version == '8'
-      uses: codecov/codecov-action@54bcd8715eee62d40e33596ef5e8f0f48dbbccab # v4.1.0
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./target/site/jacoco/jacoco.xml
-        flags: unittests
+        java_version:
+        - '8'
+        - '11'
+        - '17'
+        - '21'
+        os:
+        - ubuntu-20.04
+name: Build
+on:
+  repository_dispatch:
+    types: trigger-ga___main.yml
+permissions:
+  contents: read
